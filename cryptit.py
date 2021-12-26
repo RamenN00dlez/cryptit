@@ -10,7 +10,7 @@ from Crypto.Hash import SHA3_256
 from Crypto.Hash import SHA3_384
 from Crypto.Hash import SHA3_512
 
-
+from time import sleep
 
 BUF_SIZE    = 65536
 hash_funcs  = {
@@ -55,9 +55,12 @@ def hash(args):
     hashObj = hash_funcs[args.cipher].new()
     if (args.string):
         hashObj.update(args.string.encode())
-        print(hashObj.hexdigest())
     elif (args.file):
-        print(args.file.read())
+        buf = args.file.read(BUF_SIZE)
+        while (buf != ""):
+            hashObj.update(buf.encode())
+            buf = args.file.read(BUF_SIZE)
+    print(hashObj.hexdigest())
 
 def parse():
     parser = argparse.ArgumentParser(description="Encrypt or decrypt files and strings of text using symmetric or asymmetric cryptography.")
@@ -80,6 +83,7 @@ def parse():
         return args
     else:
         print("Hashing calls must be paired with valid hash functions and encryption/decryption with valid encryption algorithms.")
+        exit(0)
 
 if __name__ == "__main__":
     main()
