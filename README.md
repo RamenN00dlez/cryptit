@@ -2,7 +2,7 @@
 
 This is a command line utility program designed for quick and easy hashing of data files 
 using as many hashing algorithms as we could find in the pycryptodome library.
-encryption and decryption of data files using AES-128, AES-192, AES-128, and DES3 using the ECB, CBC, CFB, and OFB encryption modes.
+encryption and decryption of data files using AES-256, AES-192, AES-128, and DES3 using the ECB, CBC, CFB, and OFB encryption modes.
 
 ## Usage
 
