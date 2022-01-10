@@ -41,10 +41,9 @@ crypt_funcs = [
     "AES-128",
     "AES-192",
     "AES-256",
-    "DES3",
-    "BLOWFISH"
+    "DES3"
 ]
-modes = ["CBC", "ECB", "CFB", "OFB", "CTR", "EAX"]
+modes = ["CBC", "ECB", "CFB", "OFB"]
 
 def main():
     args = parse()
@@ -59,7 +58,24 @@ def encrypt(args):
     if (args.file):
         with open(args.file.name + ".enc", "wb") as f:
             if (args.cipher == "DES3"):
-                key = PBKDF2(args.password, count=1000000, salt=SALT, dkLen=24)
+                key = PBKDF2(args.password, count=100, salt=SALT, dkLen=24)
+                key = DES3.adjust_key_parity(key)
+                    
+                cipher = None
+                ivect = bytes.fromhex(hash_funcs["MD5"].new(key).hexdigest())[0:8]
+                if (args.mode == "ECB"):
+                    cipher = DES3.new(key, DES3.MODE_ECB)
+                elif (args.mode == "CBC"):
+                    cipher = DES3.new(key, DES3.MODE_CBC, iv=ivect)
+                elif (args.mode == "CFB"):
+                    cipher = DES3.new(key, DES3.MODE_CFB, iv=ivect)
+                elif (args.mode == "OFB"):
+                    cipher = DES3.new(key, DES3.MODE_OFB, iv=ivect)
+
+                for plaintext in iter(partial(args.file.read, BUF_SIZE), b''):
+                    ciphertext = cipher.encrypt(pad(plaintext, DES3.block_size))
+                    f.write(ciphertext) 
+
             elif ("AES" in args.cipher):
                 keylen = 0
                 if (args.cipher == "AES-128"): 
@@ -69,19 +85,44 @@ def encrypt(args):
                 elif (args.cipher == "AES-256"): 
                     keylen = 32
                 key = PBKDF2(args.password, count=100, salt=SALT, dkLen=keylen)
-                cipher = AES.new(key, AES.MODE_ECB)
+                cipher = None
+                ivect = bytes.fromhex(hash_funcs["MD5"].new(key).hexdigest())
+                print(ivect)
+                if (args.mode == "ECB"):
+                    cipher = AES.new(key, AES.MODE_ECB)
+                elif (args.mode == "CBC"):
+                    cipher = AES.new(key, AES.MODE_CBC, iv=ivect)
+                elif (args.mode == "CFB"):
+                    cipher = AES.new(key, AES.MODE_CFB, iv=ivect)
+                elif (args.mode == "OFB"):
+                    cipher = AES.new(key, AES.MODE_OFB, iv=ivect)
+
                 for plaintext in iter(partial(args.file.read, BUF_SIZE), b''):
                     ciphertext = cipher.encrypt(pad(plaintext, AES.block_size))
                     f.write(ciphertext) 
-            elif (args.cipher == "BLOWFISH"):
-                key = args.password
             print("Encrypted content saved to " + f.name)
 
 def decrypt(args):
     if (args.file):
         with open(args.file.name[:-4], "wb") as f:
             if (args.cipher == "DES3"):
-                key = PBKDF2(args.password, count=1000000, salt=SALT, dkLen=24)
+                key = PBKDF2(args.password, count=100, salt=SALT, dkLen=24)
+                key = DES3.adjust_key_parity(key)
+                    
+                cipher = None
+                ivect = bytes.fromhex(hash_funcs["MD5"].new(key).hexdigest())[0:8]
+                if (args.mode == "ECB"):
+                    cipher = DES3.new(key, DES3.MODE_ECB)
+                elif (args.mode == "CBC"):
+                    cipher = DES3.new(key, DES3.MODE_CBC, iv=ivect)
+                elif (args.mode == "CFB"):
+                    cipher = DES3.new(key, DES3.MODE_CFB, iv=ivect)
+                elif (args.mode == "OFB"):
+                    cipher = DES3.new(key, DES3.MODE_OFB, iv=ivect)
+
+                for ciphertext in iter(partial(args.file.read, BUF_SIZE), b''):
+                    plaintext = unpad(cipher.decrypt(ciphertext), DES3.block_size)
+                    f.write(plaintext) 
             elif ("AES" in args.cipher):
                 keylen = 0
                 if (args.cipher == "AES-128"): 
@@ -91,7 +132,18 @@ def decrypt(args):
                 elif (args.cipher == "AES-256"): 
                     keylen = 32
                 key = PBKDF2(args.password, count=100, salt=SALT, dkLen=keylen)
-                cipher = AES.new(key, AES.MODE_ECB)
+                cipher = None
+                ivect = bytes.fromhex(hash_funcs["MD5"].new(key).hexdigest())
+                print(ivect)
+                if (args.mode == "ECB"):
+                    cipher = AES.new(key, AES.MODE_ECB)
+                elif (args.mode == "CBC"):
+                    cipher = AES.new(key, AES.MODE_CBC, iv=ivect)
+                elif (args.mode == "CFB"):
+                    cipher = AES.new(key, AES.MODE_CFB, iv=ivect)
+                elif (args.mode == "OFB"):
+                    cipher = AES.new(key, AES.MODE_OFB, iv=ivect)
+
                 for ciphertext in iter(partial(args.file.read, BUF_SIZE), b''):
                     plaintext = unpad(cipher.decrypt(ciphertext), AES.block_size)
                     f.write(plaintext) 
@@ -100,7 +152,7 @@ def decrypt(args):
             print("Decrypted content saved to " + f.name)
 
 def hash(args):
-    hashObj = hash_funcs[args.cipher.toUpper()].new()
+    hashObj = hash_funcs[args.cipher.upper()].new()
     if (args.string):
         hashObj.update(args.string.encode())
     elif (args.file):
@@ -130,15 +182,19 @@ def parse():
     if ((args.encrypt or args.decrypt) and not args.password):
         print("Encrytion and decryption require a password")
         exit(0)
-    elif (args.mode not in modes):
+    elif ((args.encrypt or args.decrypt) and args.mode not in modes):
         print("Invalid encryption mode.")
         exit(0)
     elif (args.hash and (args.password or args.mode)):
         print("Hashing does not take a password parameter nor a mode parameter.")
         exit(0)
+    elif (args.string and not args.hash):
+        print("String input can only be hashed. Use a file for encryption/decryption.")
+        exit(0)
     elif (args.decrypt and ".enc" != args.file.name[-4:]):
         print("Files to decrypt must end in the .enc extension.")
         exit(0)
+
     if (args.hash and args.cipher in hash_funcs
         or (args.encrypt or args.decrypt) 
         and (args.cipher in crypt_funcs)):
